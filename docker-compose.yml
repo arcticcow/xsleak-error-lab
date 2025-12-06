@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Victim service: a small Flask application exposing a protected
+  # resource at /admin.js.  It listens on port 5000 internally and is
+  # published to the host on the same port.  The container name
+  # "victim" makes it easy to refer to this service from the attacker
+  # container when both containers are attached to the same network.
+  victim:
+    build: ./victim
+    container_name: victim
+    ports:
+      - "5000:5000"
+
+    networks:
+      - xsleaknet
+
+  # Attacker service: serves a static HTML page that attempts to
+  # load /admin.js from the victim.  It listens on port 80 inside
+  # the container and is mapped to port 8080 on the host.  The
+  # attacker HTML refers to victim.xsleak.test:5000; you must map
+  # victim.xsleak.test and attacker.xsleak.test to 127.0.0.1 in your hosts file.
+  attacker:
+    build: ./attacker
+    container_name: attacker
+    ports:
+      - "8080:80"
+    networks:
+      - xsleaknet
+
+networks:
+  xsleaknet:
+    driver: bridge

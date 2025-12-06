@@ -1,0 +1,101 @@
+"""
+Victim web application for the XS‑Leak lab.
+
+This Flask application simulates a protected endpoint that is only
+available to authenticated users. The `/login` endpoint sets a simple
+cookie, and `/secret.js` will only return a 200 OK response when
+the client presents this cookie. Otherwise, the server returns a 404
+status code, causing an error event on the attacker’s side when
+loaded as a subresource.
+
+The app also serves a logout endpoint that clears the cookie and a
+root page providing a description of the service.
+
+MIT License
+"""
+
+from flask import Flask, make_response, request, redirect, url_for
+
+app = Flask(__name__)
+
+# Name of the authentication cookie.  In a real application this
+# would be a secure, random session identifier.  Here it’s a static
+# value for educational purposes.
+AUTH_COOKIE_NAME = "auth"
+AUTH_COOKIE_VALUE = "1"
+
+
+@app.route("/")
+def index():
+    """Return a simple welcome page describing the victim service."""
+    return (
+        "<h1>Victim Site</h1>"
+        "<p>This site hosts a protected resource at /secret.js that is only "
+        "available to logged‑in users.</p>"
+        "<p>Use <a href='/login'>/login</a> to authenticate and "
+        "<a href='/logout'>/logout</a> to clear your session.</p>"
+    )
+
+
+@app.route("/login")
+def login():
+    """Set an auth cookie and redirect back to the home page."""
+    resp = make_response(
+        "<p>Logged in. You may now access <code>/secret.js</code>. "
+        "Return to the <a href='/'>home page</a>.</p>"
+    )
+    # Set the cookie using the domain and path so it is sent to this
+    # service.  In a production environment you would set the
+    # SameSite attribute to Lax or Strict to mitigate CSRF/XS‑Leak attacks.
+    resp.set_cookie(
+        AUTH_COOKIE_NAME,
+        AUTH_COOKIE_VALUE,
+        path="/",
+        httponly=False,
+        secure=False,
+        samesite="Lax",
+    )
+    return resp
+
+
+@app.route("/logout")
+def logout():
+    """Clear the auth cookie and redirect back to the home page."""
+    resp = make_response(
+        "<p>Logged out. The auth cookie has been cleared. "
+        "Return to the <a href='/'>home page</a>.</p>"
+    )
+    resp.set_cookie(AUTH_COOKIE_NAME, "", expires=0)
+    return resp
+
+
+@app.route("/secret.js")
+def secret_js():
+    """Return a JS file only if the client presents the auth cookie.
+
+    When the cookie is missing or has the wrong value, return a 404
+    response instead of 200.  The attacker page will observe this via
+    the `onerror` event and infer whether the user is logged in.
+    """
+    auth_cookie = request.cookies.get(AUTH_COOKIE_NAME)
+    if auth_cookie == AUTH_COOKIE_VALUE:
+        # User is considered authenticated; return a small JS payload
+        # and a 200 status.  The JS does nothing but could log to the
+        # console if you wish to see it executed.
+        js = (
+            "// secret.js: executed only when the auth cookie is present\n"
+            "console.log('Victim: secret.js loaded successfully');\n"
+        )
+        resp = make_response(js, 200)
+        resp.headers["Content-Type"] = "application/javascript"
+        return resp
+    else:
+        # User is not authenticated; return 404 to trigger error event
+        return "", 404
+
+
+if __name__ == "__main__":
+    # When run directly, start the Flask development server.  In the
+    # Docker container we will use gunicorn or the built‑in server via
+    # FLASK_RUN_HOST and FLASK_RUN_PORT environment variables.
+    app.run(host="0.0.0.0", port=5000)
